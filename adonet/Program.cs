@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Dapper;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
@@ -26,7 +27,10 @@ namespace adonet
 
             Console.WriteLine("----- EntityFramework -----");
             EntityFrameworkSample();
-            
+
+            Console.WriteLine("----- Dapper -----");
+            DapperSample(connectionString);
+
             Console.ReadLine();
         }
 
@@ -111,6 +115,29 @@ namespace adonet
 
         private static void EntityFrameworkSample()
         {
+            // Entity SQLでの参照
+            Console.WriteLine("-- Entity SQL");
+            using (EntityConnection connection = new EntityConnection("name=SampleContext"))
+            {
+                connection.Open();
+
+                string query1 = "SELECT m.id, m.name, m.age FROM SampleContext.member AS m WHERE m.age >= @age";
+
+                using (EntityCommand cmd = new EntityCommand(query1, connection))
+                {
+                    cmd.Parameters.AddWithValue("age", 25);
+
+                    using (DbDataReader rdr = cmd.ExecuteReader(CommandBehavior.SequentialAccess))
+                    {
+                        while (rdr.Read())
+                        {
+                            Console.WriteLine("id={0},name={1},age={2}", rdr["id"], rdr["name"], rdr["age"]);
+                        }
+                    }
+                }
+
+            }
+
             using (var db = new SampleContext())
             {
                 // LINQ to Entitiesでの参照
@@ -135,31 +162,30 @@ namespace adonet
 
                 // Entity Framewokでの更新
                 var carol = db.member.Find(3);
-                carol.age = 30;
+                carol.age = 60;
                 db.SaveChanges();
             }
+        }
 
-            // Entity SQLでの参照
-            Console.WriteLine("-- Entity SQL");
-            using (EntityConnection connection = new EntityConnection("name=SampleContext"))
+        private static void DapperSample(string connectionString)
+        {
+            using (SqlConnection connection = new SqlConnection())
             {
+                connection.ConnectionString = connectionString;
                 connection.Open();
 
-                string query1 = "SELECT m.id, m.name, m.age FROM SampleContext.member AS m WHERE m.age >= @age";
+                // Dapperによる参照
+                string selectquery = "SELECT id, name, age FROM member WHERE age >= @age";
+                var members = connection.Query<member>(selectquery, new { age = 25 });
 
-                using (EntityCommand cmd = new EntityCommand(query1, connection))
+                foreach (var member in members)
                 {
-                    cmd.Parameters.AddWithValue("age", 25);
-
-                    using (DbDataReader rdr = cmd.ExecuteReader(CommandBehavior.SequentialAccess))
-                    {
-                        while (rdr.Read())
-                        {
-                            Console.WriteLine("id={0},name={1},age={2}", rdr["id"], rdr["name"], rdr["age"]);
-                        }
-                    }
+                    Console.WriteLine("id={0},name={1},age={2}", member.id, member.name, member.age);
                 }
 
+                // Dapperによる更新
+                string updatequery = "UPDATE member SET age = 30 WHERE id = @id";
+                connection.Execute(updatequery, new { id = 3 });
             }
         }
     }
